@@ -122,7 +122,7 @@ function generateOutputFile(blockHeader, coinbaseTx, validTransactions) {
     for (const txid of validTransactions) {
         content += `${txid}\n`;
     }
-    fs.writeFileSync("output.txt", content);
+    fs.writeFileSync("output.txt", content, { encoding: 'utf-8' }); // Specify encoding to prevent ENOBUFS error
 }
 
 function main() {
