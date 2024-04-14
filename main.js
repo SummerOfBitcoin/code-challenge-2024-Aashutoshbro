@@ -1,146 +1,120 @@
 const fs = require('fs');
 const crypto = require('crypto');
+const path = require('path');
 
-class TransactionValidator {
-    constructor(mempoolDir) {
-        this.mempoolDir = mempoolDir;
-        this.utxoSet = new Set(); // Simulated UTXO set
-    }
+// Function to calculate the block hash
+function calculateBlockHash(blockHeader) {
+    const blockHeaderBin = Buffer.from(blockHeader, 'hex');
+    const blockHash = crypto.createHash('sha256').update(crypto.createHash('sha256').update(blockHeaderBin).digest()).digest();
+    return blockHash.reverse().toString('hex');
+}
 
-    loadTransactionData(filename) {
-        const fileContent = fs.readFileSync(filename, 'utf8');
-        return JSON.parse(fileContent);
-    }
-
-    validateTransactionStructure(txData) {
-        const requiredFields = ["version", "locktime", "vin", "vout"];
-        return requiredFields.every(field => txData.hasOwnProperty(field));
-    }
-
-    validateInputs(txData) {
-        for (const vin of txData.vin) {
-            if (!this.utxoSet.has(vin.txid)) {
-                console.log(`Input validation failed for transaction ${txData.txid}: Previous transaction output not found in UTXO set.`);
+// Function to validate a transaction
+function validateTransaction(transaction) {
+    try {
+        const vin = transaction.vin || [];
+        const vout = transaction.vout || [];
+        
+        // Validate each input (vin)
+        for (const input of vin) {
+            const prevout = input.prevout || {};
+            const scriptpubkeyType = prevout.scriptpubkey_type || '';
+            const scriptpubkeyAddress = prevout.scriptpubkey_address || '';
+            const value = prevout.value || 0;
+            
+            // Perform basic checks on input
+            if (!['v0_p2wpkh', 'v1_p2tr'].includes(scriptpubkeyType)) {
+                return false;
+            }
+            if (!scriptpubkeyAddress.startsWith('bc1')) {
+                return false;
+            }
+            if (value <= 0) {
                 return false;
             }
         }
-        return true;
-    }
-
-    validateSignatures(txData) {
-        for (const vin of txData.vin) {
-            // Simulate signature verification
-            if (vin.scriptsig !== "" && vin.scriptsig !== "valid_signature") {
-                console.log(`Signature validation failed for transaction ${txData.txid}: Invalid signature.`);
+        
+        // Validate each output (vout)
+        for (const output of vout) {
+            const scriptpubkeyType = output.scriptpubkey_type || '';
+            const scriptpubkeyAddress = output.scriptpubkey_address || '';
+            const value = output.value || 0;
+            
+            // Perform basic checks on output
+            if (!['v0_p2wpkh', 'v1_p2tr'].includes(scriptpubkeyType)) {
+                return false;
+            }
+            if (!scriptpubkeyAddress.startsWith('bc1')) {
+                return false;
+            }
+            if (value <= 0) {
                 return false;
             }
         }
-        return true;
-    }
-
-    validateScripts(txData) {
-        for (const vin of txData.vin) {
-            if (!vin.scriptsig.includes("valid_script_keyword")) {
-                console.log(`Script validation failed for transaction ${txData.txid}: Invalid script.`);
-                return false;
-            }
-        }
-        return true;
-    }
-
-    checkDoubleSpending(txData) {
-        const inputs = new Set(txData.vin.map(vin => vin.txid));
-        if (inputs.size !== txData.vin.length) {
-            console.log(`Double spending detected for transaction ${txData.txid}: Duplicate transaction inputs found.`);
-            return true;
-        }
+        
+        return true;  // Transaction is valid if all checks pass
+    } catch (error) {
+        console.log(`Error validating transaction: ${error}`);
         return false;
     }
+}
 
-    validateTransactions() {
-        const validTransactions = [];
-        console.log("Starting transaction validation process...\n");
-        const files = fs.readdirSync(this.mempoolDir);
-        for (const filename of files) {
-            if (filename.endsWith(".json")) {
-                const txData = this.loadTransactionData(`${this.mempoolDir}/${filename}`);
-                const txid = txData.txid;
-                console.log(`Validating transaction: ${txid}`);
-
-                // Transaction Structure Validation
-                if (!this.validateTransactionStructure(txData)) {
-                    console.log(`Transaction structure validation failed for: ${txid}`);
-                    continue;
-                }
-
-                // Input Validation
-                if (!this.validateInputs(txData)) {
-                    continue;
-                }
-
-                // Signature Validation
-                if (!this.validateSignatures(txData)) {
-                    continue;
-                }
-
-                // Script Validation
-                if (!this.validateScripts(txData)) {
-                    continue;
-                }
-
-                // Double Spending Check
-                if (this.checkDoubleSpending(txData)) {
-                    continue;
-                }
-
-                // If all validations passed, add to the list of valid transactions
-                validTransactions.push(txid);
-                console.log(`Transaction ${txid} successfully validated!\n`);
+// Function to mine a block
+function mineBlock(transactions, prevBlockHash, difficultyTarget) {
+    let nonce = 0;
+    while (true) {
+        const blockHeader = prevBlockHash + nonce.toString(16).padStart(8, '0');
+        const blockHash = calculateBlockHash(blockHeader);
+        
+        if (BigInt('0x' + blockHash) < BigInt('0x' + difficultyTarget)) {
+            const validTransactions = transactions.filter(validateTransaction);
+            if (validTransactions.length === 0) {
+                throw new Error('No valid transactions to mine.');
             }
+            
+            const coinbaseTransaction = validTransactions[0];
+            const txidList = validTransactions.map(tx => tx.vin[0].txid);
+            
+            return { blockHeader, blockHash, coinbaseTransaction, txidList };
         }
-        return validTransactions;
+        
+        nonce++;
     }
 }
 
-function generateBlockHeader(difficultyTarget) {
-    // Generate a block header (for demonstration purpose, a simple hash of current time is used)
-    const timestamp = Date.now().toString();
-    let blockHeader = crypto.createHash('sha256').update(timestamp).digest('hex');
-    // Add difficulty target to the block header
-    blockHeader += difficultyTarget;
-    return blockHeader;
-}
-
-function generateCoinbaseTransaction() {
-    // Generate a serialized coinbase transaction (for demonstration purpose, a simple string is used)
-    const coinbaseTx = "Coinbase transaction";
-    return coinbaseTx;
-}
-
-function generateOutputFile(blockHeader, coinbaseTx, validTransactions) {
-    let content = `${blockHeader}\n${coinbaseTx}\n`;
-    for (const txid of validTransactions) {
-        content += `${txid}\n`;
+// Function to read transaction files from mempool folder
+function readTransactionsFromMempool(mempoolDir) {
+    const transactions = [];
+    const files = fs.readdirSync(mempoolDir);
+    for (const filename of files) {
+        if (filename.endsWith('.json')) {
+            const fileContent = fs.readFileSync(path.join(mempoolDir, filename), 'utf8');
+            const transactionData = JSON.parse(fileContent);
+            transactions.push(transactionData);
+        }
     }
-    fs.writeFileSync("output.txt", content, { encoding: 'utf-8' }); // Specify encoding to prevent ENOBUFS error
+    console.log(`Number of transactions read: ${transactions.length}`);
+    return transactions;
 }
 
+// Main function
 function main() {
-    const difficultyTarget = "0000ffff00000000000000000000000000000000000000000000000000000000";
-
-    // Initialize TransactionValidator with the mempool directory
-    const validator = new TransactionValidator("mempool");
-
-    // Set up the simulated UTXO set (for demonstration purpose, it's left empty)
-    validator.utxoSet = new Set();
-
-    // Validate transactions in the mempool directory
-    const validTransactions = validator.validateTransactions();
-
-    // Generate block header, coinbase transaction, and output file
-    const blockHeader = generateBlockHeader(difficultyTarget);
-    const coinbaseTx = generateCoinbaseTransaction();
-    generateOutputFile(blockHeader, coinbaseTx, validTransactions);
+    const mempoolDir = './mempool';
+    const difficultyTarget = '0000ffff00000000000000000000000000000000000000000000000000000000';
+    const prevBlockHash = '0000000000000000000000000000000000000000000000000000000000000000';
+    
+    try {
+        const transactions = readTransactionsFromMempool(mempoolDir);
+        
+        const { blockHeader, blockHash, coinbaseTransaction, txidList } = mineBlock(transactions, prevBlockHash, difficultyTarget);
+        
+        // Write block header, coinbase transaction, and transaction IDs to output file
+        const outputFileContent = `${blockHeader}\n${JSON.stringify(coinbaseTransaction)}\n${txidList.join('\n')}\n`;
+        fs.writeFileSync('output.txt', outputFileContent, 'utf8');
+    } catch (error) {
+        console.log(`An error occurred: ${error}`);
+        process.exit(1);
+    }
 }
 
 main();
