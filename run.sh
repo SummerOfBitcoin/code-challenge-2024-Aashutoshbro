@@ -5,7 +5,7 @@
 
 
 # Update this file to run your own code
-node demo2.js > output.txt
+node demo.js > output.txt
 
 sed -i '' -e '${/^$/d;}' output.txt
 

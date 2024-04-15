@@ -629,11 +629,29 @@ function main() {
 
     let blockHeaderSerializedHex = mined(timestamp, bits, prevBlock_Hash, result, nonce);
 
+
+
+
+
+    
+// Check the current length
+let currentLength = blockHeaderSerializedHex.length / 2; // Divide by 2 to convert from hexadecimal characters to bytes
+
+
+// Calculate padding length
+let paddingLength = 80 - currentLength;
+
+// Add padding
+for (let i = 0; i < paddingLength; i++) {
+    blockHeaderSerializedHex += "00"; // Add zero bytes as padding
+}
     console.log(blockHeaderSerializedHex);
     console.log(serializedOut);
     txids.forEach(txid => {
         console.log(txid);
     });
 }
+
+
 
 main();
