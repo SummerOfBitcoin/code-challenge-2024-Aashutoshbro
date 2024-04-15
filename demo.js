@@ -614,7 +614,7 @@ function main() {
 
     const { timestamp, bits, prevBlock_Hash, result, txid1, txids, serializedOut } = preMineBlock();
 
-    let nonce = 0;
+    let nonce = 1;
     let blockHeaderHash = mineBlock(timestamp, bits, prevBlock_Hash, result, nonce);
     let target = "0000ffff00000000000000000000000000000000000000000000000000000000";
 
