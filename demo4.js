@@ -515,7 +515,7 @@ function preMineBlock() {
     return { timestamp, bits, prevBlock_Hash, result, txid1, txids, serializedOut };
 }
 
-function mineBlock(timestamp, bits, prevBlock_Hash, result, nonce) {
+function mineBlock(timestamp, bits, prevBlock_Hash, result, nonce, targetDifficulty) {
 
     const blockHeader = {
         "version": 0x00000007,
@@ -526,49 +526,24 @@ function mineBlock(timestamp, bits, prevBlock_Hash, result, nonce) {
         "nonce": nonce
     }
 
-    const blockHeaderSerialized = [];
-    const versionBytes = Buffer.alloc(4);
-    versionBytes.writeUInt32LE(blockHeader.version);
-    blockHeaderSerialized.push(...versionBytes);
 
-    const prevBlock_HashBytes = Buffer.alloc(32);
-    prevBlock_HashBytes.writeUInt32LE(blockHeader.prevBlock_Hash);
-    blockHeaderSerialized.push(...prevBlock_HashBytes);
-
-    const timestampBytes = Buffer.alloc(4);
-    timestampBytes.writeUInt32LE(blockHeader.timestamp);
-    blockHeaderSerialized.push(...timestampBytes);
-
-    const bitsBytes = Buffer.alloc(4);
-    bitsBytes.writeUInt32LE(blockHeader.bits);
-    blockHeaderSerialized.push(...bitsBytes);
-
-    const nonceBytes = Buffer.alloc(4);
-    nonceBytes.writeUInt32LE(blockHeader.nonce);
-    blockHeaderSerialized.push(...nonceBytes);
-
-
-    const blockHeaderSerializedHex = blockHeaderSerialized.map(byte => {
-        return byte.toString(16).padStart(2, '0');
+    while (true) {
+        const blockHeaderSerializedHex = mined(blockHeader);
+        const blockHeaderHash = doubleSHA256(Buffer.from(blockHeaderSerializedHex, 'hex'));
+            
+        // Check if the block hash meets the target difficulty
+        if (blockHeaderHash < targetDifficulty) {
+            return blockHeaderHash; // Return the valid block hash
+        } else {
+            nonce++; // Increment nonce for the next iteration
+        blockHeader.nonce = nonce; // Update nonce in the block header
+        }
     }
-    ).join('');
 
-    const blockHeaderHash = doubleSHA256(Buffer.from(blockHeaderSerializedHex, 'hex'));
-
-    return blockHeaderHash;
 }
 
-function mined(timestamp, bits, prevBlock_Hash, result, nonce) {
-
-    const blockHeader = {
-        "version": 0x00000007,
-        "prevBlock_Hash": prevBlock_Hash,
-        "merkleRoot": result,
-        "timestamp": timestamp,
-        "bits": bits,
-        "nonce": nonce
-    }
-
+// Function to serialize the block header
+function mined(blockHeader) {
     const blockHeaderSerialized = [];
     const versionBytes = Buffer.alloc(4);
     versionBytes.writeUInt32LE(blockHeader.version);
@@ -590,14 +565,13 @@ function mined(timestamp, bits, prevBlock_Hash, result, nonce) {
     nonceBytes.writeUInt32LE(blockHeader.nonce);
     blockHeaderSerialized.push(...nonceBytes);
 
-
     const blockHeaderSerializedHex = blockHeaderSerialized.map(byte => {
         return byte.toString(16).padStart(2, '0');
-    }
-    ).join('');
+    }).join('');
 
     return blockHeaderSerializedHex;
 }
+
 
 function main() {
     const parsedArray = fetchDataFromFiles();
@@ -616,18 +590,18 @@ function main() {
 
     let nonce = 0;
     let blockHeaderHash = mineBlock(timestamp, bits, prevBlock_Hash, result, nonce);
-    let target = "0000ffff00000000000000000000000000000000000000000000000000000000";
+    let targetDifficulty = "0000ffff00000000000000000000000000000000000000000000000000000000";
 
     while (true) {
-        if (blockHeaderHash < target) {
+        if (blockHeaderHash < targetDifficulty) {
             break;
         } else {
             nonce++;
-            blockHeaderHash = mineBlock(timestamp, bits, prevBlock_Hash, result, nonce);
+            blockHeaderHash = mineBlock(timestamp, bits, prevBlock_Hash, result, nonce, targetDifficulty);
         }
     }
 
-    let blockHeaderSerializedHex = mined(timestamp, bits, prevBlock_Hash, result, nonce);
+    let blockHeaderSerializedHex = mined(timestamp, bits, prevBlock_Hash, result, nonce, targetDifficulty);
 
     console.log(blockHeaderSerializedHex);
     console.log(serializedOut);
