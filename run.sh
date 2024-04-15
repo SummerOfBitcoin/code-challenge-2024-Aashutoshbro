@@ -7,6 +7,5 @@
 # Update this file to run your own code
 node demo.js > output.txt
 
-sed -i '' -e '${/^$/d;}' output.txt
 
 echo "Script execution completed. Output saved in output.txt"
