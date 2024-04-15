@@ -549,7 +549,7 @@ function mineBlock(timestamp, bits, prevBlock_Hash, result, nonce) {
 
 
     const blockHeaderSerializedHex = blockHeaderSerialized.map(byte => {
-        return byte.toString(16).padStart(2, '0');
+        return byte.toString(16).padStart(4, '0');
     }
     ).join('');
 
