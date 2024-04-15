@@ -1,118 +1,85 @@
 import json
-import hashlib
-import sys
 import os
-import binascii
+import hashlib
 
-# Calculate the block hash
-def calculate_block_hash(block_header):
-    block_header_bin = binascii.unhexlify(block_header)
-    block_hash = hashlib.sha256(hashlib.sha256(block_header_bin).digest()).digest()
-    return block_hash[::-1].hex()
+# Constants
+DIFFICULTY_TARGET = "0000ffff00000000000000000000000000000000000000000000000000000000"
+BLOCK_SIZE_LIMIT = 4000000  # Assuming block size limit is 4,000,000 bytes
 
-# Validate a transaction
+# Function to validate a transaction
 def validate_transaction(transaction):
-    try:
-        vin = transaction.get('vin', [])
-        vout = transaction.get('vout', [])
-        
-        # Validate each input (vin)
-        for input in vin:
-            prevout = input.get('prevout', {})
-            scriptpubkey_type = prevout.get('scriptpubkey_type', '')
-            scriptpubkey_address = prevout.get('scriptpubkey_address', '')
-            value = prevout.get('value', 0)
-            
-            # Perform basic checks on input
-            if scriptpubkey_type not in ['v0_p2wpkh', 'v1_p2tr']:  # Valid scriptpubkey types
-                return False
-            if not scriptpubkey_address.startswith('bc1'):  # Valid Bitcoin address format
-                return False
-            if value <= 0:  # Positive value for input
-                return False
-        
-        # Validate each output (vout)
-        for output in vout:
-            scriptpubkey_type = output.get('scriptpubkey_type', '')
-            scriptpubkey_address = output.get('scriptpubkey_address', '')
-            value = output.get('value', 0)
-            
-            # Perform basic checks on output
-            if scriptpubkey_type not in ['v0_p2wpkh', 'v1_p2tr']:  # Valid scriptpubkey types
-                return False
-            if not scriptpubkey_address.startswith('bc1'):  # Valid Bitcoin address format
-                return False
-            if value <= 0:  # Positive value for output
-                return False
-        
-        return True  # Transaction is valid if all checks pass
-    
-    except Exception as e:
-        print(f"Error validating transaction: {str(e)}")
+    # Check if transaction has required fields
+    if "txid" not in transaction or "vin" not in transaction or "vout" not in transaction:
         return False
 
-# Mine a block
-def mine_block(transactions, prev_block_hash, difficulty_target):
-    nonce = 0  # Initialize nonce to 0
-    while True:
-        block_header = prev_block_hash + format(nonce, '08x')  # Append nonce to block header
-        block_hash = calculate_block_hash(block_header)
-        
-        # Check if block hash meets the difficulty target
-        if block_hash < difficulty_target:
-            # Serialize coinbase transaction (first valid transaction)
-            valid_transactions = [tx for tx in transactions if validate_transaction(tx)]
-            if not valid_transactions:
-                raise Exception("No valid transactions to mine.")
-                
-            coinbase_transaction = valid_transactions[0]
-            txid_list = [tx['vin'][0]['txid'] for tx in valid_transactions]
-            
-            return block_header, block_hash, coinbase_transaction, txid_list
-        
-        nonce += 1  # Increment nonce if hash does not meet target
+    # Validate inputs (vin)
+    for vin in transaction["vin"]:
+        if "txid" not in vin or "vout" not in vin:
+            return False
+        # Additional validation rules for inputs
 
-def main():
-    # Path to mempool folder containing transaction files
-    mempool_folder = "./mempool"
-    transactions = []
-    
-    try:
-        # Read all transaction files from mempool folder
-        for filename in os.listdir(mempool_folder):
-            with open(os.path.join(mempool_folder, filename), 'r') as file:
-                transaction_data = json.load(file)
-                transactions.append(transaction_data)
-        
-        print(f"Number of transactions read: {len(transactions)}")
-        
-        # Validate transactions
-        valid_transactions = [tx for tx in transactions if validate_transaction(tx)]
-        print(f"Number of valid transactions: {len(valid_transactions)}")
-        
-        if not valid_transactions:
-            print("No valid transactions to mine. Exiting.")
-            sys.exit(0)
-        
-        # Previous block hash (placeholder for demonstration)
-        prev_block_hash = "0000000000000000000000000000000000000000000000000000000000000000"
-        # Difficulty target
-        difficulty_target = "0000ffff00000000000000000000000000000000000000000000000000000000"
-        
-        # Mine the block
-        mined_block_header, mined_block_hash, coinbase_transaction, txid_list = mine_block(transactions, prev_block_hash, difficulty_target)
-        
-        # Output block header and mined transactions
-        with open("output.txt", 'w') as output_file:
-            output_file.write(mined_block_header + "\n")
-            output_file.write(json.dumps(coinbase_transaction) + "\n")  # Serialize coinbase transaction
-            for txid in txid_list:
-                output_file.write(txid + "\n")  # Write transaction ID to file
-        
-    
-    except Exception as e:
-        print(f"An error occurred: {str(e)}")
-        sys.exit(1)
+    # Validate outputs (vout)
+    for vout in transaction["vout"]:
+        if "value" not in vout or "scriptpubkey_asm" not in vout:
+            return False
+        # Additional validation rules for outputs
 
-if __name__ == "__main__":
-    main()
+    # Additional validation rules for the transaction as a whole
+
+    # Return True if the transaction passes all validation checks
+    return True
+
+# Read JSON files from the mempool folder
+mempool_folder = "mempool"
+transactions = []
+for filename in os.listdir(mempool_folder):
+    if filename.endswith(".json"):
+        with open(os.path.join(mempool_folder, filename)) as file:
+            transaction_data = json.load(file)
+            transactions.append(transaction_data)
+
+# Validate and filter valid transactions
+valid_transactions = []
+for transaction in transactions:
+    if validate_transaction(transaction):
+        valid_transactions.append(transaction)
+
+# Sort valid transactions by fee in descending order
+valid_transactions.sort(key=lambda x: x["fee"], reverse=True)
+
+# Calculate total fee and block size
+total_fee = 0
+block_size = 0
+mined_transactions = []
+for transaction in valid_transactions:
+    transaction_size = len(json.dumps(transaction))
+    if block_size + transaction_size <= BLOCK_SIZE_LIMIT:
+        mined_transactions.append(transaction)
+        total_fee += transaction["fee"]
+        block_size += transaction_size
+
+# Create the block header
+block_header = f"Block Header: Difficulty Target={DIFFICULTY_TARGET}"
+
+# Create the coinbase transaction
+coinbase_transaction = {
+    "txid": "coinbase",
+    "vin": [],
+    "vout": [{"value": total_fee, "scriptpubkey_asm": "coinbase_script"}]
+}
+
+# Mine the block
+nonce = 0
+block_hash = ""
+while block_hash[:16] != DIFFICULTY_TARGET:
+    block_data = json.dumps([block_header, coinbase_transaction] + mined_transactions + [nonce])
+    block_hash = hashlib.sha256(block_data.encode()).hexdigest()
+    nonce += 1
+
+# Write the output file
+with open("output.txt", "w") as output_file:
+    output_file.write(f"{block_header}\n")
+    output_file.write(f"{json.dumps(coinbase_transaction)}\n")
+    output_file.write(f"{coinbase_transaction['txid']}\n")
+    for transaction in mined_transactions:
+        output_file.write(f"{transaction['txid']}\n")

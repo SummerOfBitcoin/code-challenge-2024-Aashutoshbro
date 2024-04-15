@@ -83,7 +83,7 @@ function main() {
     
     try {
         const transactions = readTransactionsFromMempool(mempoolDir); // Read transactions from mempool
-        const { blockHeader, blockHash, coinbaseTransaction, txidList } = mineBlock(transactions, prevBlockHash, difficultyTarget); // Mine a block
+        const { blockHeader, coinbaseTransaction, txidList } = mineBlock(transactions, prevBlockHash, difficultyTarget); // Mine a block
         const outputFileContent = `${blockHeader}\n${JSON.stringify(coinbaseTransaction)}\n${txidList.join('\n')}\n`; // Format output content
         fs.writeFileSync('output.txt', outputFileContent, 'utf8'); // Write output to file
     } catch (error) {

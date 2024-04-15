@@ -1,4 +1,4 @@
 # Update this file to run your own code
-node main.js
+node demo.js
 
 # python3 main.py
