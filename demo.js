@@ -515,23 +515,6 @@ function preMineBlock() {
     return { timestamp, bits, prevBlock_Hash, result, txid1, txids, serializedOut };
 }
 
-
-function mineBlock(timestamp, bits, prevBlockHash, merkleRoot, nonce) {
-    const blockHeader = [
-        Buffer.alloc(4, timestamp, 'hex'), // Timestamp (4 bytes)
-        Buffer.alloc(4, bits, 'hex'), // Bits (4 bytes)
-        Buffer.from(prevBlockHash, 'hex'), // Previous Block Hash (32 bytes)
-        Buffer.from(merkleRoot, 'hex'), // Merkle Root (32 bytes)
-        Buffer.alloc(4), // Nonce (4 bytes), initially set to 0
-    ];
-
-    const concatenatedHeader = Buffer.concat(blockHeader);
-    const blockHeaderHash = doubleSHA256(concatenatedHeader);
-
-    return blockHeaderHash.toString('hex');
-}
-
-
 function mineBlock(timestamp, bits, prevBlock_Hash, result, nonce) {
 
     const blockHeader = {
