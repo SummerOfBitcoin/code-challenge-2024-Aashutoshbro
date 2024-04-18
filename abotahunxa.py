@@ -1,95 +1,66 @@
 import os
 import json
+import hashlib
+import time
 
-def validate_transaction(transaction_data):
-    # Parse the transaction JSON data
-    transaction = json.loads(transaction_data)
+# Function to calculate Merkle root (dummy implementation)
+def calculate_merkle_root(transactions):
+    return hashlib.sha256(b'Merkle Root').hexdigest()
 
-    # Validate the transaction
-    if "version" not in transaction or \
-       "locktime" not in transaction or \
-       "vin" not in transaction or \
-       "vout" not in transaction:
-        # Missing required fields
-        return False
+# Function to convert integer to little-endian byte representation
+def int_to_little_endian(integer):
+    hex_representation = hex(integer)[2:]  # Get hexadecimal representation
+    if len(hex_representation) % 2 != 0:
+        hex_representation = '0' + hex_representation  # Pad with zero if necessary
+    little_endian_hex = ''.join(reversed([hex_representation[i:i+2] for i in range(0, len(hex_representation), 2)]))  # Convert to little-endian
+    little_endian_bytes = bytes.fromhex(little_endian_hex)  # Convert to bytes
+    return little_endian_bytes
 
-    # Validate version and locktime
-    if not isinstance(transaction["version"], int) or \
-       not isinstance(transaction["locktime"], int):
-        # Version and locktime should be integers
-        return False
-
-    # Validate inputs
-    for vin in transaction["vin"]:
-        if "txid" not in vin or \
-           "vout" not in vin or \
-           "sequence" not in vin:
-            # Missing required fields in input
-            return False
-        if not isinstance(vin["txid"], str) or \
-           not isinstance(vin["vout"], int) or \
-           not isinstance(vin["sequence"], int):
-            # txid should be string, vout and sequence should be integers
-            return False
-
-    # Validate outputs
-    for vout in transaction["vout"]:
-        if "scriptpubkey" not in vout or \
-           "value" not in vout:
-            # Missing required fields in output
-            return False
-        if not isinstance(vout["scriptpubkey"], str) or \
-           not isinstance(vout["value"], int):
-            # scriptpubkey should be string, value should be integer
-            return False
-
-    # All validation checks passed, transaction is valid
-    return True
-
-def serialize_coinbase_transaction(transaction_data):
-    coinbase_json = json.loads(transaction_data)
-    input_count = encode_varint(len(coinbase_json["vin"]))  # Variable-length encoding for input count
-    # Serialize transaction data
-    serialized_transaction = input_count
-
-    txids = []  # List to store txids
+# Function to generate block header
+def generate_block_header(json_data):
+    # Extract relevant information
+    version = json_data['version']
+    version_little_endian = int_to_little_endian(version)  # Convert version to little-endian
+    previous_block_hash = "0000000000000000000000000000000000000000000000000000000000000000"  # Placeholder for previous block hash
+    transactions = json_data['vin'] + json_data['vout']
+    merkle_root = calculate_merkle_root(transactions)
+    timestamp = int(time.time())
+    timestamp_hex = hex(timestamp)[2:].zfill(8)  # Convert timestamp to hex with padding
+    difficulty_target = "0000ffff00000000000000000000000000000000000000000000000000000000"
+    nonce = 12345  # Example nonce value
+    nonce_hex = hex(nonce)[2:].zfill(8)  # Convert nonce to hex with padding
     
-    for vin in coinbase_json["vin"]:
-        serialized_transaction += bytes.fromhex(vin["txid"])
-        txids.append(vin["txid"])  # Add txid to the list
-        serialized_transaction += vin["vout"].to_bytes(4, byteorder="little")  # 4 bytes
-        if "scriptpubkey" in vin:
-            serialized_transaction += encode_varint(len(vin["scriptpubkey"])) + bytes.fromhex(vin["scriptpubkey"])  # Variable-length encoding for scriptpubkey length
-        else:
-            # If scriptpubkey is missing, add a placeholder byte
-            serialized_transaction += bytes.fromhex("00")  # Placeholder byte
-        serialized_transaction += vin["sequence"].to_bytes(4, byteorder="little")  # 4 bytes
+    # Construct block header
+    block_header = f"{version_little_endian.hex()}000000{previous_block_hash}{merkle_root}{timestamp_hex}{difficulty_target}{nonce_hex}"
+    
+    # Hash the block header
+    block_hash = hashlib.sha256(block_header.encode()).hexdigest()
+    
+    return block_header, block_hash
 
-    return serialized_transaction, txids
+# Directory containing JSON files
+mempool_dir = "mempool"
 
-def encode_varint(value):
-    if value < 0xfd:
-        return value.to_bytes(1, byteorder="little")
-    elif value <= 0xffff:
-        return b'\xfd' + value.to_bytes(2, byteorder="little")
-    elif value <= 0xffffffff:
-        return b'\xfe' + value.to_bytes(4, byteorder="little")
-    else:
-        return b'\xff' + value.to_bytes(8, byteorder="little")
+# Output file for block headers
+output_file = "output.txt"
 
-def serialize_coinbase_transactions_in_folder(folder_path):
-    with open("output.txt", "a") as output_file:
-        for filename in os.listdir(folder_path):
-            if filename.endswith(".json"):
-                file_path = os.path.join(folder_path, filename)
-                with open(file_path, "r") as file:
-                    transaction_data = file.read()
-                    if validate_transaction(transaction_data):
-                        serialized_transaction, txids = serialize_coinbase_transaction(transaction_data)
-                        output_file.write(serialized_transaction.hex() + "\n")
-                        # Write txids to the output file
-                        output_file.write("\n".join(txids) + "\n")
-
-# Example usage:
-folder_path = "mempool"
-serialize_coinbase_transactions_in_folder(folder_path)
+# Open output file in write mode
+with open(output_file, 'w') as f:
+    # Iterate over JSON files in mempool directory
+    for filename in os.listdir(mempool_dir):
+        if filename.endswith(".json"):
+            # Read JSON file
+            with open(os.path.join(mempool_dir, filename)) as json_file:
+                json_data = json.load(json_file)
+            
+            # Perform validation (**Add your transaction validation logic here**)**
+            is_valid = True  # Placeholder for validation result
+            
+            if is_valid:
+                # Generate block header for current JSON file
+                block_header, block_hash = generate_block_header(json_data)
+                
+                # Write block header and hash to output file
+                f.write(block_header + "\n")
+                f.write("Block Hash:\n")
+                f.write(block_hash + "\n\n")
