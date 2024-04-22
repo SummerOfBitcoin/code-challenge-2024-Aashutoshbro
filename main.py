@@ -873,8 +873,24 @@ def merkle_root(txids: List[str]) -> str:
     while len(hashes) > 1:
         if len(hashes) % 2 == 1:
             hashes.append(hashes[-1])
-        hashes = [double_sha256(hashes[i] + hashes[i + 1]) for i in range(0, len(hashes), 2)]
+        new_hashes = []
+        for i in range(0, len(hashes), 2):
+            combined_hash = double_sha256(hashes[i] + hashes[i + 1])
+            new_hashes.append(combined_hash)
+        hashes = new_hashes
     return hashes[0].hex()
+
+
+
+
+# def merkle_root(txids: List[str]) -> str:
+#     hashes = [bytes.fromhex(txid) for txid in txids]
+#     while len(hashes) > 1:
+#         if len(hashes) % 2 == 1:
+#             hashes.append(hashes[-1])
+#         hashes = [double_sha256(hashes[i] + hashes[i + 1]) for i in range(0, len(hashes), 2)]
+#     return hashes[0].hex()
+
 
 # function for witness commitment for the block
 def witness_commitment(txs):
