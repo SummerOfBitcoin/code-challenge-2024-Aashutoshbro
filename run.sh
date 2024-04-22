@@ -1,1 +1,1 @@
-python abotahunxa.py
+python main.py
