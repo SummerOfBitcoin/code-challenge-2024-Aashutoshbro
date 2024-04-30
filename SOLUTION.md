@@ -1,5 +1,5 @@
 # Verifying a Signature
-# We can now verify a signature using some of the primitives that we have:
+## We can now verify a signature using some of the primitives that we have:
 ```
 >>> from ecc import S256Point, G, N
 >>> z = 0xbc62d4b80d9e36da29c16c5d4d9f11731f36052c72401a76c23c0fb5a9b74423
@@ -39,8 +39,7 @@ S256Point(028d003eab2e428d11983f3e97c3fa0addf3b42740df0d211795ffb3be2f6c52, \
 
 
 
-# Again, the procedure is pretty straightforward. We can update the sec method to
-# handle compressed SEC keys:
+## Again, the procedure is pretty straightforward. We can update the sec method to handle compressed SEC keys:
 ```
 class S256Point(Point):
 ...
@@ -57,7 +56,7 @@ class S256Point(Point):
 ```
 
 
-# der signature format
+## der signature format
 ```
   class Signature:
 ...
@@ -79,7 +78,7 @@ class S256Point(Point):
  return bytes([0x30, len(result)]) + result
 
 ```
-# Base58 Encoding
+## Base58 Encoding
 ```
 BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 ...
@@ -100,11 +99,11 @@ def encode_base58(s):
 ```
 
 # Transaction Components
-# At a high level, a transaction really only has four components. They are:
-# 1. Version
-# 2. Inputs
-# 3. Outputs
-# 4. Locktime
+## At a high level, a transaction really only has four components. They are:
+## 1. Version
+## 2. Inputs
+## 3. Outputs
+## 4. Locktime
 ```
 
  class Tx:
@@ -138,7 +137,7 @@ def encode_base58(s):
 
 ```
 
-#  Now that we know what the fields are, we can start creating a TxIn class in Python:
+##  Now that we know what the fields are, we can start creating a TxIn class in Python:
 ```
 class TxIn:
  def __init__(self, prev_tx, prev_index, script_sig=None, sequence=0xffffffff):
@@ -156,7 +155,7 @@ class TxIn:
  )
 ```
 
-# We can now start coding the TxOut class:
+## We can now start coding the TxOut class:
 ```
 class TxOut:
  def __init__(self, amount, script_pubkey):
@@ -166,7 +165,7 @@ class TxOut:
  return '{}:{}'.format(self.amount, self.script_pubkey)
 ```
 
-# Lastly, we can serialize Tx:
+## Lastly, we can serialize Tx:
 ```
  class Tx:
 ...
@@ -183,8 +182,8 @@ class TxOut:
  return result
 ```
 
-# Coding a Script Parser and Serializer
-# Now that we know how Script works, we can write a script parser:
+## Coding a Script Parser and Serializer
+## Now that we know how Script works, we can write a script parser:
 ```
 class Script:
  def __init__(self, cmds=None):
@@ -221,22 +220,21 @@ class Script:
  raise SyntaxError('parsing script failed')
  return cls(cmds)
 ```
-# Each command is either an opcode to be executed or an element to be pushed
-# onto the stack.
-# Script serialization always starts with the length of the entire script.
-# We parse until the right amount of bytes are consumed.
-# The byte determines if we have an opcode or element.
-# This converts the byte into an integer in Python.
-# For a number between 1 and 75 inclusive, we know the next n bytes are an
-# element.
-# 76 is OP_PUSHDATA1, so the next byte tells us how many bytes to read.
-# 77 is OP_PUSHDATA2, so the next two bytes tell us how many bytes to read.
-# We have an opcode that we store.
-# The script should have consumed exactly the length of bytes we expected; other‐
-# wise, we raise an error.
+# Each command is either an opcode to be executed or an element to be pushed onto the stack.
+### Script serialization always starts with the length of the entire script.
+### We parse until the right amount of bytes are consumed.
+### The byte determines if we have an opcode or element.
+### This converts the byte into an integer in Python.
+### For a number between 1 and 75 inclusive, we know the next n bytes are an
+### element.
+### 76 is OP_PUSHDATA1, so the next byte tells us how many bytes to read.
+### 77 is OP_PUSHDATA2, so the next two bytes tell us how many bytes to read.
+### We have an opcode that we store.
+### The script should have consumed exactly the length of bytes we expected; other‐
+### wise, we raise an error.
 
 
-# We can similarly write a script serializer:
+## We can similarly write a script serializer:
 ```
 class Script:
 ...
@@ -265,18 +263,18 @@ class Script:
  return encode_varint(total) + result
 ```
 
-# If the command is an integer, we know that’s an opcode.
-# If the length is between 1 and 75 inclusive, we encode the length as a single byte.
-# For any element with length from 76 to 255, we put OP_PUSHDATA1 first, then
-# encode the length as a single byte, followed by the element.
-# For an element with a length from 256 to 520, we put OP_PUSHDATA2 first, then
-# encode the length as two bytes in little endian, followed by the element.
-# Any element longer than 520 bytes cannot be serialized.
-# Script serialization starts with the length of the entire script.
-# izing the ScriptSig and ScriptPubKey fields.
+### If the command is an integer, we know that’s an opcode.
+### If the length is between 1 and 75 inclusive, we encode the length as a single byte.
+### For any element with length from 76 to 255, we put OP_PUSHDATA1 first, then
+### encode the length as a single byte, followed by the element.
+### For an element with a length from 256 to 520, we put OP_PUSHDATA2 first, then
+### encode the length as two bytes in little endian, followed by the element.
+### Any element longer than 520 bytes cannot be serialized.
+### Script serialization starts with the length of the entire script.
+### izing the ScriptSig and ScriptPubKey fields.
 
 
-# verify signature
+## verify signature
 ```
 >>> from ecc import S256Point, Signature
 >>> sec = bytes.fromhex('0349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e\
@@ -290,12 +288,13 @@ c8e10615bed')
 >>> print(point.verify(z, signature))
 True
 ```
-<!-- 
-Making the Transaction
-We have a plan for a new transaction with one input and two outputs. But first, let’s
-look at some other tools we’ll need.
-We need a way to take an address and get the 20-byte hash out of it. This is the oppo‐
-site of encoding an address, so we call the function decode_base58: -->
+
+# Making the Transaction
+## We have a plan for a new transaction with one input and two outputs. But first, let’s look at some other tools we’ll need.
+### We need a way to take an address and get the 20-byte hash out of it. This is the oppo‐
+### site of encoding an address, so we call the function decode_base58:
+
+
 ```
 def decode_base58(s):
  num = 0
