@@ -100,10 +100,10 @@ def encode_base58(s):
 
 # Transaction Components
 ## At a high level, a transaction really only has four components. They are:
-## 1. Version
-## 2. Inputs
-## 3. Outputs
-## 4. Locktime
+### 1. Version
+### 2. Inputs
+### 3. Outputs
+### 4. Locktime
 ```
 
  class Tx:

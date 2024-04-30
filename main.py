@@ -909,12 +909,10 @@ def return_id(transactions):
 
 
 def merkle_parent(hash1, hash2):
- '''Takes the binary hashes and calculates the hash256'''
  return hash256(hash1 + hash2)
 
 def merkle_parent_level(hashes):
-    '''Takes a list of binary hashes and returns a list that's half
-    the length'''
+
     if len(hashes) == 1:
         raise RuntimeError('Cannot take a parent level with only 1 item')
     if len(hashes) % 2 == 1:
@@ -927,8 +925,6 @@ def merkle_parent_level(hashes):
 
 
 def merkle_root(txids: List[str]) -> str:
-    '''Takes a list of binary hashes and returns the merkle root
-    '''
     hashes = [bytes.fromhex(txid) for txid in txids]
     while len(hashes) > 1:
         hashes = merkle_parent_level(hashes)
@@ -939,6 +935,8 @@ def validate_merkle_root(self):
     hashes = [h[::-1] for h in self.tx_hashes]
     root = merkle_root(hashes)
     return root[::-1] == self.merkle_root
+
+
 
 # def merkle_root(txids: List[str]) -> str:
 #     hashes = [bytes.fromhex(txid) for txid in txids]
