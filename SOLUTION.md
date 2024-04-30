@@ -1,6 +1,6 @@
 # Verifying a Signature
 # We can now verify a signature using some of the primitives that we have:
-
+```
 >>> from ecc import S256Point, G, N
 >>> z = 0xbc62d4b80d9e36da29c16c5d4d9f11731f36052c72401a76c23c0fb5a9b74423
 >>> r = 0x37206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c6
@@ -33,7 +33,7 @@ S256Point(028d003eab2e428d11983f3e97c3fa0addf3b42740df0d211795ffb3be2f6c52, \
 >>> print(hex(s))
 0xbb14e602ef9e3f872e25fad328466b34e6734b7a0fcd58b1eb635447ffae8cb9
 
-
+```
 
 
 
@@ -41,7 +41,7 @@ S256Point(028d003eab2e428d11983f3e97c3fa0addf3b42740df0d211795ffb3be2f6c52, \
 
 # Again, the procedure is pretty straightforward. We can update the sec method to
 # handle compressed SEC keys:
-
+```
 class S256Point(Point):
 ...
  def sec(self, compressed=True):
@@ -54,11 +54,11 @@ class S256Point(Point):
  else:
  return b'\x04' + self.x.num.to_bytes(
   
-
+```
 
 
 # der signature format
-
+```
   class Signature:
 ...
  def der(self):
@@ -78,9 +78,9 @@ class S256Point(Point):
  result += bytes([2, len(sbin)]) + sbin
  return bytes([0x30, len(result)]) + result
 
-
+```
 # Base58 Encoding
-
+```
 BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 ...
 def encode_base58(s):
@@ -97,7 +97,7 @@ def encode_base58(s):
  num, mod = divmod(num, 58)
  result = BASE58_ALPHABET[mod] + result
  return prefix + result 
-
+```
 
 # Transaction Components
 # At a high level, a transaction really only has four components. They are:
@@ -105,6 +105,7 @@ def encode_base58(s):
 # 2. Inputs
 # 3. Outputs
 # 4. Locktime
+```
 
  class Tx:
  def __init__(self, version, tx_ins, tx_outs, locktime, testnet=False):
@@ -135,9 +136,10 @@ def encode_base58(s):
  return hash256(self.serialize())[::-1]
 
 
-
+```
 
 #  Now that we know what the fields are, we can start creating a TxIn class in Python:
+```
 class TxIn:
  def __init__(self, prev_tx, prev_index, script_sig=None, sequence=0xffffffff):
  self.prev_tx = prev_tx
@@ -152,19 +154,20 @@ class TxIn:
  self.prev_tx.hex(),
  self.prev_index,
  )
-
+```
 
 # We can now start coding the TxOut class:
+```
 class TxOut:
  def __init__(self, amount, script_pubkey):
  self.amount = amount
  self.script_pubkey = script_pubkey
  def __repr__(self):
  return '{}:{}'.format(self.amount, self.script_pubkey)
-
+```
 
 # Lastly, we can serialize Tx:
-
+```
  class Tx:
 ...
  def serialize(self):
@@ -178,10 +181,11 @@ class TxOut:
  result += tx_out.serialize()
  result += int_to_little_endian(self.locktime, 4)
  return result
-
+```
 
 # Coding a Script Parser and Serializer
 # Now that we know how Script works, we can write a script parser:
+```
 class Script:
  def __init__(self, cmds=None):
  if cmds is None:
@@ -216,7 +220,7 @@ class Script:
  if count != length:
  raise SyntaxError('parsing script failed')
  return cls(cmds)
-
+```
 # Each command is either an opcode to be executed or an element to be pushed
 # onto the stack.
 # Script serialization always starts with the length of the entire script.
@@ -233,7 +237,7 @@ class Script:
 
 
 # We can similarly write a script serializer:
-
+```
 class Script:
 ...
  def raw_serialize(self):
@@ -259,7 +263,7 @@ class Script:
  result = self.raw_serialize()
  total = len(result)
  return encode_varint(total) + result
-
+```
 
 # If the command is an integer, we know that’s an opcode.
 # If the length is between 1 and 75 inclusive, we encode the length as a single byte.
@@ -273,7 +277,7 @@ class Script:
 
 
 # verify signature
-
+```
 >>> from ecc import S256Point, Signature
 >>> sec = bytes.fromhex('0349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e\
 213bf016b278a')
@@ -285,5 +289,105 @@ c8e10615bed')
 >>> signature = Signature.parse(der)
 >>> print(point.verify(z, signature))
 True
+```
+<!-- 
+Making the Transaction
+We have a plan for a new transaction with one input and two outputs. But first, let’s
+look at some other tools we’ll need.
+We need a way to take an address and get the 20-byte hash out of it. This is the oppo‐
+site of encoding an address, so we call the function decode_base58: -->
+```
+def decode_base58(s):
+ num = 0
+ for c in s:
+ num *= 58
+ num += BASE58_ALPHABET.index(c)
+ combined = num.to_bytes(25, byteorder='big')
+ checksum = combined[-4:]
+ if hash256(combined[:-4])[:4] != checksum:
+ raise ValueError('bad address: {} {}'.format(checksum,
+ hash256(combined[:-4])[:4]))
+ return combined[1:-4] 
+```
 
+
+<!-- Coding p2sh
+The special pattern of RedeemScript, OP_HASH160, hash160, and OP_EQUAL needs han‐
+dling. The evaluate method in script.py is where we handle the special case:
+class Script: -->
+```
+...
+ def evaluate(self, z):
+...
+ while len(commands) > 0:
+ command = commands.pop(0)
+ if type(command) == int:
+...
+ else:
+ stack.append(cmd)
+ if len(cmds) == 3 and cmds[0] == 0xa9 \
+ and type(cmds[1]) == bytes and len(cmds[1]) == 20 \
+ and cmds[2] == 0x87:
+ cmds.pop()
+ h160 = cmds.pop()
+ cmds.pop()
+ if not op_hash160(stack):
+ return False
+ stack.append(h160)
+ if not op_equal(stack):
+ return False
+ if not op_verify(stack):
+ LOGGER.info('bad p2sh h160')
+ return False
+ redeem_script = encode_varint(len(cmd)) + cmd
+ stream = BytesIO(redeem_script)
+ cmds.extend(Script.parse(stream).cmds)
+ ```
+
+
+<!-- for the block header -->
+```
+class Block:
+ def __init__(self, version, prev_block, merkle_root, timestamp, bits, nonce):
+ self.version = version
+ self.prev_block = prev_block
+ self.merkle_root = merkle_root
+ self.timestamp = timestamp
+ self.bits = bits
+ self.nonce = nonce
+```
+
+
+
+
+<!-- for the version -->
+
+```
+Checking for these features is relatively straightforward:
+>>> from io import BytesIO
+>>> from block import Block
+>>> b = Block.parse(BytesIO(bytes.fromhex('020000208ec39428b17323fa0ddec8e887b\
+4a7c53b8c0a0a220cfd0000000000000000005b0750fce0a889502d40508d39576821155e9c9e3\
+f5c3157f961db38fd8b25be1e77a759e93c0118a4ffd71d')))
+>>> print('BIP9: {}'.format(b.version >> 29 == 0b001))
+BIP9: True
+>>> print('BIP91: {}'.format(b.version >> 4 & 1 == 1))
+BIP91: False
+168 | Chapter 9: Blocks
+>>> print('BIP141: {}'.format(b.version >> 1 & 1 == 1))
+BIP141: True
+```
+
+<!-- target making -->
+```
+target = coefficient × 256exponent–3
+This is how we calculate the target given the bits field in Python:
+>>> from helper import little_endian_to_int
+>>> bits = bytes.fromhex('e93c0118')
+>>> exponent = bits[-1]
+>>> coefficient = little_endian_to_int(bits[:-1])
+>>> target = coefficient * 256**(exponent - 3)
+>>> print('{:x}'.format(target).zfill(64))
+0000000000000000013ce9000000000000000000000000000000000000000000
+```
 
