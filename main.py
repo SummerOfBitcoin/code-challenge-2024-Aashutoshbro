@@ -909,8 +909,8 @@ def return_id(transactions):
 
 
 def merkle_parent(hash1, hash2):
- '''Takes the binary hashes and calculates the hash256'''
- return hash256(hash1 + hash2)
+    '''Takes the binary hashes and calculates the hash256'''
+    return hash256(hash1 + hash2)
 
 def merkle_parent_level(hashes):
     '''Takes a list of binary hashes and returns a list that's half
@@ -931,7 +931,7 @@ def merkle_root(hashes):
     current_level = hashes
     while len(current_level) > 1:
         current_level = merkle_parent_level(current_level)
-    return current_level[0]
+    return current_level[0].hex().encode()
 
 
 
@@ -942,9 +942,6 @@ def merkle_root(hashes):
 #             hashes.append(hashes[-1])
 #         hashes = [double_sha256(hashes[i] + hashes[i + 1]) for i in range(0, len(hashes), 2)]
 #     return hashes[0].hex()
-
-
-
 
 
 
