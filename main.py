@@ -932,8 +932,7 @@ def merkle_root(txids: List[str]) -> str:
     hashes = [bytes.fromhex(txid) for txid in txids]
     while len(hashes) > 1:
         hashes = merkle_parent_level(hashes)
-    return hashes[0].hex()
-
+    return hashes[0].hexdigest()
 
 # def merkle_root(txids: List[str]) -> str:
 #     hashes = [bytes.fromhex(txid) for txid in txids]
