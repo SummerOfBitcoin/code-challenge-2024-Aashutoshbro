@@ -934,6 +934,12 @@ def merkle_root(txids: List[str]) -> str:
         hashes = merkle_parent_level(hashes)
     return hashes[0].hex()
 
+
+def validate_merkle_root(self):
+    hashes = [h[::-1] for h in self.tx_hashes]
+    root = merkle_root(hashes)
+    return root[::-1] == self.merkle_root
+
 # def merkle_root(txids: List[str]) -> str:
 #     hashes = [bytes.fromhex(txid) for txid in txids]
 #     while len(hashes) > 1:
