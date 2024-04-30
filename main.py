@@ -925,13 +925,13 @@ def merkle_parent_level(hashes):
         parent_level.append(parent)
     return parent_level
 
-def merkle_root(hashes):
+def merkle_root(txids: List[str]) -> str:
     '''Takes a list of binary hashes and returns the merkle root
     '''
-    current_level = hashes
-    while len(current_level) > 1:
-        current_level = merkle_parent_level(current_level)
-    return current_level[0].hex().encode()
+    hashes = [bytes.fromhex(txid) for txid in txids]
+    while len(hashes) > 1:
+        hashes = merkle_parent_level(hashes)
+    return hashes[0].hex().encode()
 
 
 
