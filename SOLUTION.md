@@ -311,10 +311,8 @@ def decode_base58(s):
 ```
 
 
-<!-- Coding p2sh
-The special pattern of RedeemScript, OP_HASH160, hash160, and OP_EQUAL needs han‐
-dling. The evaluate method in script.py is where we handle the special case:
-class Script: -->
+# Coding p2sh
+# The special pattern of RedeemScript, OP_HASH160, hash160, and OP_EQUAL needs handling. The evaluate method in script.py is where we handle the special case: class Script:
 ```
 ...
  def evaluate(self, z):
@@ -345,7 +343,7 @@ class Script: -->
  ```
 
 
-<!-- for the block header -->
+# for the block header
 ```
 class Block:
  def __init__(self, version, prev_block, merkle_root, timestamp, bits, nonce):
@@ -360,7 +358,7 @@ class Block:
 
 
 
-<!-- for the version -->
+# for the version
 
 ```
 Checking for these features is relatively straightforward:
@@ -377,8 +375,7 @@ BIP91: False
 >>> print('BIP141: {}'.format(b.version >> 1 & 1 == 1))
 BIP141: True
 ```
-
-<!-- target making -->
+# target making
 ```
 target = coefficient × 256exponent–3
 This is how we calculate the target given the bits field in Python:
@@ -391,3 +388,310 @@ This is how we calculate the target given the bits field in Python:
 0000000000000000013ce9000000000000000000000000000000000000000000
 ```
 
+# difficulty level
+```
+difficulty = 0xffff × 2560x1d–3 target
+The code looks like this:
+>>> from helper import little_endian_to_int
+>>> bits = bytes.fromhex('e93c0118')
+>>> exponent = bits[-1]
+>>> coefficient = little_endian_to_int(bits[:-1])
+>>> target = coefficient*256**(exponent-3)
+>>> difficulty = 0xffff * 256**(0x1d-3) / target
+>>> print(difficulty)
+888171856257.3206
+```
+
+
+# We can now create a node, handshake, and then ask for some headers:
+```
+>>> from io import BytesIO
+>>> from block import Block, GENESIS_BLOCK
+>>> from network import SimpleNode, GetHeadersMessage
+>>> node = SimpleNode('mainnet.programmingbitcoin.com', testnet=False)
+>>> node.handshake()
+>>> genesis = Block.parse(BytesIO(GENESIS_BLOCK))
+>>> getheaders = GetHeadersMessage(start_block=genesis.hash())
+>>> node.send(getheaders)
+```
+
+```
+class HeadersMessage:
+ command = b'headers'
+ def __init__(self, blocks):
+ self.blocks = blocks
+ @classmethod
+ def parse(cls, stream):
+ num_headers = read_varint(stream)
+ blocks = []
+ for _ in range(num_headers):
+ blocks.append(Block.parse(stream))
+ num_txs = read_varint(stream)
+ if num_txs != 0:
+ raise RuntimeError('number of txs not 0')
+ return cls(blocks)
+ ```
+
+
+
+
+
+ # Merkle root
+
+ ```
+ In practice, this means reversing the leaves before we start and reversing the root at
+the end:
+>>> from helper import merkle_root
+>>> tx_hex_hashes = [
+... '42f6f52f17620653dcc909e58bb352e0bd4bd1381e2955d19c00959a22122b2e',
+... '94c3af34b9667bf787e1c6a0a009201589755d01d02fe2877cc69b929d2418d4',
+... '959428d7c48113cb9149d0566bde3d46e98cf028053c522b8fa8f735241aa953',
+... 'a9f27b99d5d108dede755710d4a1ffa2c74af70b4ca71726fa57d68454e609a2',
+... '62af110031e29de1efcad103b3ad4bec7bdcf6cb9c9f4afdd586981795516577',
+... '766900590ece194667e9da2984018057512887110bf54fe0aa800157aec796ba',
+... 'e8270fb475763bc8d855cfe45ed98060988c1bdcad2ffc8364f783c98999a208',
+... ]
+>>> tx_hashes = [bytes.fromhex(x) for x in tx_hex_hashes]
+>>> hashes = [h[::-1] for h in tx_hashes]
+>>> print(merkle_root(hashes)[::-1].hex())
+654d6181e18e4ac4368383fdc5eead11bf138f9b7ac1e15334e4411b3c4797d9
+
+ ```
+
+# We reverse the root at the end.
+# We want to calculate Merkle roots for a Block, so we add a tx_hashes parameter:
+```
+class Block:
+ def __init__(self, version, prev_block, merkle_root,
+ timestamp, bits, nonce, tx_hashes=None):
+ self.version = version
+ self.prev_block = prev_block
+ self.merkle_root = merkle_root
+ self.timestamp = timestamp
+ self.bits = bits
+ self.nonce = nonce
+ self.tx_hashes = tx_hashes
+
+``` 
+# We now allow the transaction hashes to be set as part of the initialization of the block. The transaction hashes have to be ordered.
+## As a full node, if we are given all of the transactions, we can calculate the Merkle root and check that the Merkle root is what we expect.
+
+
+
+# Merkle Tree representation
+```
+class MerkleTree:
+ def __init__(self, total):
+ self.total = total
+ self.max_depth = math.ceil(math.log(self.total, 2))
+ self.nodes = []
+ for depth in range(self.max_depth + 1):
+ num_items = math.ceil(self.total / 2**(self.max_depth - depth))
+ level_hashes = [None] * num_items
+ self.nodes.append(level_hashes)
+ self.current_depth = 0
+ self.current_index = 0
+ def __repr__(self):
+ result = []
+ for depth, level in enumerate(self.nodes):
+ items = []
+ for index, h in enumerate(level):
+ if h is None:
+ short = 'None'
+ else:
+ short = '{}...'.format(h.hex()[:8])
+ if depth == self.current_depth and index == self.current_index:
+ items.append('*{}*'.format(short[:-2]))
+ else:
+ items.append('{}'.format(short))
+ result.append(', '.join(items))
+ return '\n'.join(result)
+```
+
+
+# We need methods to traverse the Merkle tree. We’ll also include other useful methods:
+
+```
+class MerkleTree:
+...
+ def up(self):
+ self.current_depth -= 1
+ self.current_index //= 2
+ def left(self):
+ self.current_depth += 1
+ self.current_index *= 2
+ def right(self):
+ self.current_depth += 1
+ self.current_index = self.current_index * 2 + 1
+ def root(self):
+ return self.nodes[0][0]
+ def set_current_node(self, value):
+ self.nodes[self.current_depth][self.current_index] = value
+ def get_current_node(self):
+ return self.nodes[self.current_depth][self.current_index]
+ def get_left_node(self):
+ return self.nodes[self.current_depth + 1][self.current_index * 2]
+ def get_right_node(self):
+ return self.nodes[self.current_depth + 1][self.current_index * 2 + 1]
+ def is_leaf(self):
+ return self.current_depth == self.max_depth
+ def right_exists(self):
+ return len(self.nodes[self.current_depth + 1]) > \
+ self.current_index * 2 + 1
+```
+
+# We can now populate the Merkle tree and calculate the root, given the appropriate flag bits and hashes:
+
+```
+class MerkleTree:
+...
+ def populate_tree(self, flag_bits, hashes):
+ while self.root() is None:
+ if self.is_leaf():
+ flag_bits.pop(0)
+ self.set_current_node(hashes.pop(0))
+ self.up()
+ else:
+ left_hash = self.get_left_node()
+ if left_hash is None:
+ if flag_bits.pop(0) == 0:
+ self.set_current_node(hashes.pop(0))
+ self.up()
+ else:
+ self.left()
+ elif self.right_exists():
+ right_hash = self.get_right_node()
+ if right_hash is None:
+ self.right()
+ else:
+ self.set_current_node(merkle_parent(left_hash,
+ right_hash))
+self.up()
+ else:
+ self.set_current_node(merkle_parent(left_hash, left_hash))
+ self.up()
+ if len(hashes) != 0:
+ raise RuntimeError('hashes not all consumed {}'.format(len(hashes)))
+ for flag_bit in flag_bits:
+ if flag_bit != 0:
+ raise RuntimeError('flag bits not all consumed')
+ ```
+
+
+
+# Here’s a parser for the Segwit serialization:
+
+```
+class Tx:
+...
+ @classmethod
+ def parse_segwit(cls, s, testnet=False):
+ version = little_endian_to_int(s.read(4))
+ marker = s.read(2)
+ if marker != b'\x00\x01':
+ raise RuntimeError('Not a segwit transaction {}'.format(marker))
+ num_inputs = read_varint(s)
+ inputs = []
+ for _ in range(num_inputs):
+ inputs.append(TxIn.parse(s))
+ num_outputs = read_varint(s)
+ outputs = []
+ for _ in range(num_outputs):
+ outputs.append(TxOut.parse(s))
+ for tx_in in inputs:
+ num_items = read_varint(s)
+ items = []
+ for _ in range(num_items):
+ item_len = read_varint(s)
+ if item_len == 0:
+ items.append(0)
+ else:
+ items.append(s.read(item_len))
+ tx_in.witness = items
+ locktime = little_endian_to_int(s.read(4))
+ return cls(version, inputs, outputs, locktime,
+ testnet=testnet, segwit=True)
+ ```
+
+ # Serialize method for Block.
+
+ ```
+class Block:
+...
+ def serialize(self):
+ result = int_to_little_endian(self.version, 4)
+ result += self.prev_block[::-1]
+ result += self.merkle_root[::-1]
+ result += int_to_little_endian(self.timestamp, 4)
+ result += self.bits
+ result += self.nonce
+```
+
+# bip91 method for the Block class.
+
+```
+class Block:
+...
+ def bip91(self):
+ return self.version >> 4 & 1 == 1
+```
+
+# difficulty method for Block.
+```
+class Block:
+...
+ def difficulty(self):
+ lowest = 0xffff * 256**(0x1d - 3)
+ return lowest / self.target()
+ ```
+
+# validate_merkle_root method for Block.
+
+```
+class Block:
+...
+ def validate_merkle_root(self):
+ hashes = [h[::-1] for h in self.tx_hashes]
+ root = merkle_root(hashes)
+ return root[::-1] == self.merkle_root
+```
+
+
+
+# parse method for MerkleBlock.
+
+```
+class MerkleBlock:
+...
+ @classmethod
+ def parse(cls, s):
+ version = little_endian_to_int(s.read(4))
+ prev_block = s.read(32)[::-1]
+ merkle_root = s.read(32)[::-1]
+ timestamp = little_endian_to_int(s.read(4))
+ bits = s.read(4)
+ nonce = s.read(4)
+ total = little_endian_to_int(s.read(4))
+ num_hashes = read_varint(s)
+ hashes = []
+ for _ in range(num_hashes):
+ hashes.append(s.read(32)[::-1])
+ flags_length = read_varint(s)
+ flags = s.read(flags_length)
+ return cls(version, prev_block, merkle_root, timestamp, bits,
+ nonce, total, hashes, flags)
+
+ ```
+
+# is_valid method for MerkleBlock.
+
+```
+class MerkleBlock:
+...
+ def is_valid(self):
+ flag_bits = bytes_to_bit_field(self.flags)
+ hashes = [h[::-1] for h in self.hashes]
+ merkle_tree = MerkleTree(self.total)
+ merkle_tree.populate_tree(flag_bits, hashes)
+ return merkle_tree.root()[::-1] == self.merkle_root
+```
