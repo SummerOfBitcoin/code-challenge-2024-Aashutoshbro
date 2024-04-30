@@ -11,6 +11,22 @@ from typing import List
 import time 
 
 # Function to calculate the hash with the SHA-256 algorithm
+
+# class S256Point: # sample code for reference
+# ...
+#  def hash160(self, compressed=True):
+#  return hash160(self.sec(compressed))
+#  def address(self, compressed=True, testnet=False):
+#  '''Returns the address string'''
+#  h160 = self.hash160(compressed)
+#  if testnet:
+#  prefix = b'\x6f'
+#  else:
+#  prefix = b'\x00'
+#  return encode_base58_checksum(prefix + h160)
+
+
+
 def ripemd160(data):
     h = RIPEMD160.new()
     h.update(data)
@@ -868,28 +884,38 @@ def return_id(transactions):
     return id,wid
 
 # Function that returns hashes of the valid transactions
-def merkle_root(txids: List[str]) -> str:
-    hashes = [bytes.fromhex(txid) for txid in txids]
-    while len(hashes) > 1:
-        if len(hashes) % 2 == 1:
-            hashes.append(hashes[-1])
-        new_hashes = []
-        for i in range(0, len(hashes), 2):
-            combined_hash = double_sha256(hashes[i] + hashes[i + 1])
-            new_hashes.append(combined_hash)
-        hashes = new_hashes
-    return hashes[0].hex()
-
-
-
 
 # def merkle_root(txids: List[str]) -> str:
 #     hashes = [bytes.fromhex(txid) for txid in txids]
 #     while len(hashes) > 1:
 #         if len(hashes) % 2 == 1:
 #             hashes.append(hashes[-1])
-#         hashes = [double_sha256(hashes[i] + hashes[i + 1]) for i in range(0, len(hashes), 2)]
-#     return hashes[0].hex()
+#         new_hashes = []
+#         for i in range(0, len(hashes), 2):
+#             combined_hash = double_sha256(hashes[i] + hashes[i + 1])
+#             new_hashes.append(combined_hash)
+#         hashes = new_hashes
+# #     return hashes[0].hexdigest()
+
+# This is how we calculate the target given the bits field in Python:
+
+# >>> from helper import little_endian_to_int
+# >>> bits = bytes.fromhex('e93c0118')
+# >>> exponent = bits[-1]
+# >>> coefficient = little_endian_to_int(bits[:-1])
+# >>> target = coefficient * 256**(exponent - 3)
+# >>> print('{:x}'.format(target).zfill(64))
+# 0000000000000000013ce9000000000000000000000000000000000000000000
+
+
+
+def merkle_root(txids: List[str]) -> str:
+    hashes = [bytes.fromhex(txid) for txid in txids]
+    while len(hashes) > 1:
+        if len(hashes) % 2 == 1:
+            hashes.append(hashes[-1])
+        hashes = [double_sha256(hashes[i] + hashes[i + 1]) for i in range(0, len(hashes), 2)]
+    return hashes[0].hex()
 
 
 # function for witness commitment for the block
@@ -928,6 +954,26 @@ def coinbase(txs):
     tx.extend(b'\x00\x00\x00\x00') # Locktime
     txid = double_sha256(tx)
     return tx.hex(), txid[::-1].hex()
+
+
+# # Function to generate block header
+# def generate_block_header(json_data):
+#     # Extract relevant information
+#     version = json_data['version']
+#     previous_block_hash = "0000000000000000000000000000000000000000000000000000000000000000"  # Placeholder for previous block hash
+#     transactions = json_data['vin'] + json_data['vout']
+#     merkle_root = calculate_merkle_root(transactions)
+#     timestamp = int(time.time())
+#     difficulty_target = "0000ffff00000000000000000000000000000000000000000000000000000000"
+#     nonce = 12345  # Example nonce value
+    
+#     # Construct block header
+#     block_header = f"Version: {version}\nPrevious Block Hash: {previous_block_hash}\nMerkle Root: {merkle_root}\nTimestamp: {timestamp}\nDifficulty Target: {difficulty_target}\nNonce: {nonce}"
+    
+#     # Hash the block header
+#     block_hash = hashlib.sha256(block_header.encode()).hexdigest()
+    
+#     return block_header, block_hash
 
 
 # Function to create a block header with the merkle root
@@ -983,3 +1029,72 @@ output_content = f"{block_header}\n{coinbase_txn}\n" + "\n".join(tx_id)
 output_file_path = 'output.txt'
 with open(output_file_path, 'w') as file:
     file.write(output_content)
+
+
+# for version 
+# class Tx:
+#  def __init__(self, version, tx_ins, tx_outs, locktime, testnet=False):
+#  self.version = version
+#  self.tx_ins = tx_ins
+#  self.tx_outs = tx_outs
+#  self.locktime = locktime
+#  self.testnet = testnet
+#  def __repr__(self):
+#  tx_ins = ''
+#  for tx_in in self.tx_ins:
+#  tx_ins += tx_in.__repr__() + '\n'
+#  tx_outs = ''
+#  for tx_out in self.tx_outs:
+#  tx_outs += tx_out.__repr__() + '\n'
+#  return 'tx: {}\nversion: {}\ntx_ins:\n{}tx_outs:\n{}locktime: {}'.format(
+#  self.id(),
+#  self.version,
+#  tx_ins,
+#  tx_outs,
+#  self.locktime,
+#  )
+#  def id(self):
+#  '''Human-readable hexadecimal of the transaction hash'''
+#  return self.hash().hex()
+#  def hash(self):
+#  '''Binary hash of the legacy serialization'''
+#  return hash256(self.serialize())[::-1]
+
+
+
+
+
+
+
+
+
+
+
+# Two functions from helper.py will be used to parse and serialize varint fields:
+# def read_varint(s):
+#  '''read_varint reads a variable integer from a stream'''
+#  i = s.read(1)[0]
+#  if i == 0xfd:
+#  # 0xfd means the next two bytes are the number
+#  return little_endian_to_int(s.read(2))
+#  elif i == 0xfe:
+#  # 0xfe means the next four bytes are the number
+#  return little_endian_to_int(s.read(4))
+#  elif i == 0xff:
+#  # 0xff means the next eight bytes are the number
+#  return little_endian_to_int(s.read(8))
+#  else:
+#  # anything else is just the integer
+#  return i
+# def encode_varint(i):
+#  '''encodes an integer as a varint'''
+#  if i < 0xfd:
+#  return bytes([i])
+#  elif i < 0x10000:
+#  return b'\xfd' + int_to_little_endian(i, 2)
+#  elif i < 0x100000000:
+#  return b'\xfe' + int_to_little_endian(i, 4)
+#  elif i < 0x10000000000000000:
+#  return b'\xff' + int_to_little_endian(i, 8)
+#  else:
+#  raise ValueError('integer too large: {}'.format(i))
