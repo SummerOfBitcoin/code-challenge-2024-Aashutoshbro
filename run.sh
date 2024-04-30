@@ -5,4 +5,4 @@ pip install pycryptodome
 pip install pandas
 npm install elliptic
 
-python final.py
+python main.py
